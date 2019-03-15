@@ -455,3 +455,55 @@ exports.init =
 				return device.uuid
 
 		.nodeify(done)
+
+exports.osUpdate =
+	signature: 'device os-update <uuid>'
+	description: 'start a Host OS update for a device'
+	help: '''
+		Use this command to trigger a Host OS update for a device.
+
+		Notice this command will ask for confirmation interactively.
+		You can avoid this by passing the `--yes` boolean option.
+
+		Examples:
+
+			$ balena device os-update 23c73a1
+			$ balena device os-update 23c73a1 --version 2.31.0+rev1.prod
+	'''
+	options: [
+		commandOptions.optionalOsVersion
+		commandOptions.yes
+	]
+	permission: 'user'
+	action: (params, options, done) ->
+		normalizeUuidProp(params)
+		balena = require('balena-sdk').fromSharedOptions()
+		patterns = require('../utils/patterns')
+		form = require('resin-cli-form')
+
+		balena.models.device.get(params.uuid, $select: ['uuid', 'device_type', 'os_version'])
+		.then ({ uuid, device_type, os_version }) ->
+			if options.version?
+				return options.version
+
+			balena.models.os.getSupportedOsUpdateVersions(device_type, os_version)
+			.then (hupVersionInfo) ->
+				if hupVersionInfo.versions.length == 0
+					patterns.exitWithExpectedError('There are no available Host OS update targets for this device')
+
+				form.ask
+					message: 'Target OS version'
+					type: 'list'
+					choices: hupVersionInfo.versions.map (version) ->
+						name: if hupVersionInfo.recommended == version then "#{version} (recommended)" else version
+						value: version
+			.then (version) ->
+				patterns.confirm(
+					options.yes
+					'Host OS updates require a device restart when they complete. Are you sure you want to proceed?'
+				)
+				.then ->
+					balena.models.device.startOsUpdate(uuid, version)
+				.then ->
+					patterns.awaitDeviceOsUpdate(uuid, version)
+		.nodeify(done)

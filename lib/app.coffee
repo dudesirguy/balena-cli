@@ -147,6 +147,7 @@ capitano.command(actions.device.hasDeviceUrl)
 capitano.command(actions.device.register)
 capitano.command(actions.device.move)
 capitano.command(actions.device.info)
+capitano.command(actions.device.osUpdate)
 
 # ---------- Notes Module ----------
 capitano.command(actions.notes.set)

@@ -17,7 +17,7 @@ import _form = require('resin-cli-form');
 import _visuals = require('resin-cli-visuals');
 
 import _ = require('lodash');
-import Promise = require('bluebird');
+import Bluebird = require('bluebird');
 import BalenaSdk = require('balena-sdk');
 import chalk from 'chalk';
 import validation = require('./validation');
@@ -28,7 +28,7 @@ const getBalenaSdk = _.once(() => BalenaSdk.fromSharedOptions());
 const getForm = _.once((): typeof _form => require('resin-cli-form'));
 const getVisuals = _.once((): typeof _visuals => require('resin-cli-visuals'));
 
-export function authenticate(options: {}): Promise<void> {
+export function authenticate(options: {}): Bluebird<void> {
 	const balena = getBalenaSdk();
 	return getForm()
 		.run(
@@ -122,7 +122,7 @@ export function confirm(
 	message: string,
 	yesMessage?: string,
 ) {
-	return Promise.try(function() {
+	return Bluebird.try(function() {
 		if (yesOption) {
 			if (yesMessage) {
 				console.log(yesMessage);
@@ -217,7 +217,7 @@ export function awaitDevice(uuid: string) {
 			`Waiting for ${deviceName} to come online`,
 		);
 
-		const poll = (): Promise<void> => {
+		const poll = (): Bluebird<void> => {
 			return balena.models.device.isOnline(uuid).then(function(isOnline) {
 				if (isOnline) {
 					spinner.stop();
@@ -228,12 +228,59 @@ export function awaitDevice(uuid: string) {
 					// not start again if it was already started
 					spinner.start();
 
-					return Promise.delay(3000).then(poll);
+					return Bluebird.delay(3000).then(poll);
 				}
 			});
 		};
 
 		console.info(`Waiting for ${deviceName} to connect to balena...`);
+		return poll().return(uuid);
+	});
+}
+
+export async function awaitDeviceOsUpdate(
+	uuid: string,
+	targetOsVersion: string,
+) {
+	const balena = getBalenaSdk();
+	const { getDeviceOsProgress } = require('./device/progress');
+
+	return balena.models.device.getName(uuid).then(deviceName => {
+		const visuals = getVisuals();
+		const progressBar = new visuals.Progress(
+			`Updating the OS of ${deviceName} to v${targetOsVersion}`,
+		);
+		progressBar.update({ percentage: 0 });
+
+		const poll = (): Bluebird<void> => {
+			return Bluebird.all([
+				balena.models.device.getOsUpdateStatus(uuid),
+				balena.models.device.get(uuid).then(getDeviceOsProgress),
+			]).then(([osUpdateStatus, osUpdateProgress]) => {
+				if (
+					osUpdateStatus.status === 'update_done' ||
+					osUpdateStatus.status === 'done'
+				) {
+					console.info(
+						`The device ${deviceName} has been updated to v${targetOsVersion} and will restart shortly!`,
+					);
+					return;
+				}
+
+				if (osUpdateStatus.error) {
+					console.error(
+						`Failed to complete Host OS update on device ${deviceName}!`,
+					);
+					exitWithExpectedError(osUpdateStatus.error);
+					return;
+				}
+
+				progressBar.update({ percentage: osUpdateProgress });
+
+				return Bluebird.delay(3000).then(poll);
+			});
+		};
+
 		return poll().return(uuid);
 	});
 }
@@ -272,7 +319,7 @@ export function inferOrSelectDevice(preferredUuid: string) {
 export function selectFromList<T>(
 	message: string,
 	choices: Array<T & { name: string }>,
-): Promise<T> {
+): Bluebird<T> {
 	return getForm().ask({
 		message,
 		type: 'list',
