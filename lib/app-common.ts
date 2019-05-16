@@ -90,8 +90,15 @@ function setupBalenaSdkSharedOptions() {
 	});
 }
 
+process.on('uncaughtException', e => {
+	console.log(e);
+});
+process.on('unhandledRejection', e => {
+	console.log(e);
+});
+
 export function globalInit() {
-	setupRaven();
+	// setupRaven();
 	checkNodeVersion();
 	setupGlobalHttpProxy();
 	setupBalenaSdkSharedOptions();
