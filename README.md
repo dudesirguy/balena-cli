@@ -88,7 +88,7 @@ typing and formal programming interfaces. The migration is taking place graduall
 maintenance work or the implementation of new features.
 
 After cloning this repository and running `npm install` you can build the CLI using `npm run build`.
-You can then run the generated build using `./bin/balena`.
+You can then run the generated build using `./bin/run`.
 In order to ease development:
 
 * you can build the CLI using the `npm run build:fast` variant which skips some of the build steps or
